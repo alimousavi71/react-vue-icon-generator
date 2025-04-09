@@ -1,6 +1,6 @@
 import os
 import tkinter as tk
-from tkinter import filedialog, ttk, scrolledtext
+from tkinter import filedialog, ttk, scrolledtext, messagebox
 import json
 from pathlib import Path
 import re
@@ -325,20 +325,24 @@ class SvgIconGenerator:
         self.filtered_svg_files.clear()
         
         # Log start of scanning
-        self.log(f"Scanning for SVG files in: {folder_path}")
+        self.log(f"Scanning for SVG files in: {folder_path} (including subfolders)")
         
-        # Find all SVG files in the folder only (no recursion)
-        files = [f for f in os.listdir(folder_path) if f.lower().endswith('.svg')]
-        
-        for file in files:
-            # Skip hidden files
-            if file.startswith('.'):
-                continue
-                
-            file_path = os.path.join(folder_path, file)
-            
-            # Store file info
-            self.svg_files.append((file_path, file))
+        # Find all SVG files in the folder and all subfolders (with recursion)
+        for root, dirs, files in os.walk(folder_path):
+            for file in files:
+                # Skip hidden files
+                if file.startswith('.'):
+                    continue
+                    
+                if file.lower().endswith('.svg'):
+                    # Full path to the file
+                    file_path = os.path.join(root, file)
+                    
+                    # Calculate relative path from the source folder
+                    rel_path = os.path.relpath(file_path, folder_path)
+                    
+                    # Store file info
+                    self.svg_files.append((file_path, rel_path))
         
         # Log number of files found
         self.log(f"Found {len(self.svg_files)} SVG files")
@@ -346,7 +350,7 @@ class SvgIconGenerator:
         # Display files in the treeview
         self.refresh_file_list()
         
-        self.status_var.set(f"Found {len(self.svg_files)} SVG files in {folder_path}")
+        self.status_var.set(f"Found {len(self.svg_files)} SVG files in {folder_path} and subfolders")
         
     def get_component_name(self, rel_path):
         # Remove extension
@@ -614,6 +618,12 @@ export default {component_name};
         self.log(f"Starting {framework} component generation for {len(selected_files)} selected SVG files")
         self.log(f"Output folder: {dest_path}")
         
+        # Ask if user wants to preserve directory structure
+        preserve_structure = messagebox.askyesno(
+            "Preserve Directory Structure",
+            "Do you want to preserve the directory structure in the output folder?"
+        )
+        
         # Create index file for exporting all components
         file_extension = "js" if framework == "React" else "js"
         index_content = [
@@ -635,15 +645,27 @@ export default {component_name};
                 with open(file_path, 'r', encoding='utf-8') as file:
                     svg_content = file.read()
                 
+                # Determine output path based on whether to preserve directory structure
+                if preserve_structure and os.path.dirname(rel_path):
+                    # Create subdirectories to match source structure
+                    sub_dir = os.path.dirname(rel_path)
+                    output_dir = os.path.join(dest_path, sub_dir)
+                    os.makedirs(output_dir, exist_ok=True)
+                    self.log(f"Created subdirectory: {sub_dir}")
+                else:
+                    output_dir = dest_path
+                
                 # Generate component based on selected framework
                 if framework == "Vue":
                     component_content = self.create_vue_component(svg_content, rel_path, component_name)
-                    output_path = os.path.join(dest_path, f"{component_name}.vue")
-                    index_content.append(f"export {{ default as {component_name} }} from './{component_name}.vue';")
+                    output_path = os.path.join(output_dir, f"{component_name}.vue")
+                    path_for_import = os.path.join(os.path.dirname(rel_path), component_name).replace("\\", "/") if preserve_structure else component_name
+                    index_content.append(f"export {{ default as {component_name} }} from './{path_for_import}.vue';")
                 else:
                     component_content = self.create_react_component(svg_content, rel_path, component_name)
-                    output_path = os.path.join(dest_path, f"{component_name}.jsx")
-                    index_content.append(f"export {{ default as {component_name} }} from './{component_name}';")
+                    output_path = os.path.join(output_dir, f"{component_name}.jsx")
+                    path_for_import = os.path.join(os.path.dirname(rel_path), component_name).replace("\\", "/") if preserve_structure else component_name
+                    index_content.append(f"export {{ default as {component_name} }} from './{path_for_import}';")
                 
                 # Create the output file
                 with open(output_path, 'w', encoding='utf-8') as out_file:
