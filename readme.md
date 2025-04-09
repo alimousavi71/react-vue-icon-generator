@@ -14,7 +14,7 @@
 
 ## 📸 Screenshot
 
-![Application Screenshot](https://via.placeholder.com/800x600?text=SVG+Icon+Component+Generator)
+<img width="900" alt="image" src="https://github.com/user-attachments/assets/b0ae6661-646d-4c75-92ed-425d6a9215b7" />
 
 ## 🚀 Getting Started
 
